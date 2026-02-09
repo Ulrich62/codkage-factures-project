@@ -1,14 +1,15 @@
 import { neon } from "@netlify/neon";
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+function ok(data, statusCode = 200) {
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    body: JSON.stringify(data),
+  };
 }
 
-function err(msg, status = 400) {
-  return json({ error: msg }, status);
+function fail(msg, statusCode = 400) {
+  return ok({ error: msg }, statusCode);
 }
 
 // ---- SCHEMA SETUP ----
@@ -61,7 +62,6 @@ async function setup(sql) {
     )
   `;
 
-  // Seed default company if none exists
   const companies = await sql`SELECT id FROM companies LIMIT 1`;
   if (companies.length === 0) {
     await sql`
@@ -77,14 +77,14 @@ async function setup(sql) {
     `;
   }
 
-  return json({ ok: true, message: "Schema ready" });
+  return ok({ ok: true, message: "Schema ready" });
 }
 
 // ---- COMPANIES ----
 
 async function getCompanies(sql) {
   const rows = await sql`SELECT * FROM companies ORDER BY updated_at DESC`;
-  return json(rows);
+  return ok(rows);
 }
 
 async function saveCompany(sql, data) {
@@ -101,34 +101,27 @@ async function saveCompany(sql, data) {
       WHERE id = ${data.id}
       RETURNING *
     `;
-    return json(rows[0]);
+    return ok(rows[0]);
   } else {
     const rows = await sql`
       INSERT INTO companies (name, address, email, ifu, vmcf, paypal)
       VALUES (${data.name}, ${data.address || ""}, ${data.email || ""}, ${data.ifu || ""}, ${data.vmcf || ""}, ${data.paypal || ""})
       RETURNING *
     `;
-    return json(rows[0]);
+    return ok(rows[0]);
   }
 }
 
 // ---- CLIENTS ----
 
-async function getClients(sql) {
-  const rows = await sql`SELECT * FROM clients ORDER BY name ASC`;
-  return json(rows);
-}
-
 async function upsertClient(sql, data) {
   if (!data.name || !data.name.trim()) return null;
 
-  // Try to find existing client by name
   const existing = await sql`
     SELECT * FROM clients WHERE LOWER(name) = LOWER(${data.name.trim()}) LIMIT 1
   `;
 
   if (existing.length > 0) {
-    // Update if address/city changed
     const rows = await sql`
       UPDATE clients SET
         address = ${data.address || existing[0].address},
@@ -162,7 +155,6 @@ async function getInvoices(sql) {
     ORDER BY i.created_at DESC
   `;
 
-  // Fetch items for each invoice
   for (const inv of rows) {
     const items = await sql`
       SELECT * FROM invoice_items WHERE invoice_id = ${inv.id} ORDER BY sort_order ASC
@@ -170,7 +162,7 @@ async function getInvoices(sql) {
     inv.items = items;
   }
 
-  return json(rows);
+  return ok(rows);
 }
 
 async function getInvoice(sql, id) {
@@ -184,17 +176,16 @@ async function getInvoice(sql, id) {
     LEFT JOIN companies co ON i.company_id = co.id
     WHERE i.id = ${id}
   `;
-  if (rows.length === 0) return err("Not found", 404);
+  if (rows.length === 0) return fail("Not found", 404);
 
   const inv = rows[0];
   inv.items = await sql`
     SELECT * FROM invoice_items WHERE invoice_id = ${inv.id} ORDER BY sort_order ASC
   `;
-  return json(inv);
+  return ok(inv);
 }
 
 async function saveInvoice(sql, data) {
-  // 1. Upsert client
   let clientId = null;
   if (data.clientName && data.clientName.trim()) {
     const client = await upsertClient(sql, {
@@ -206,19 +197,16 @@ async function saveInvoice(sql, data) {
     if (client) clientId = client.id;
   }
 
-  // 2. Get company
   let companyId = data.companyId || null;
   if (!companyId) {
     const companies = await sql`SELECT id FROM companies ORDER BY updated_at DESC LIMIT 1`;
     if (companies.length > 0) companyId = companies[0].id;
   }
 
-  // 3. Compute total
   const totalTtc = (data.items || []).reduce((sum, item) => {
     return sum + (parseFloat(item.amount) || 0);
   }, 0);
 
-  // 4. Insert or update invoice
   let invoiceId;
   if (data.id) {
     await sql`
@@ -232,7 +220,6 @@ async function saveInvoice(sql, data) {
       WHERE id = ${data.id}
     `;
     invoiceId = data.id;
-    // Delete old items
     await sql`DELETE FROM invoice_items WHERE invoice_id = ${invoiceId}`;
   } else {
     const rows = await sql`
@@ -243,7 +230,6 @@ async function saveInvoice(sql, data) {
     invoiceId = rows[0].id;
   }
 
-  // 5. Insert items
   const items = data.items || [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -260,12 +246,12 @@ async function saveInvoice(sql, data) {
     `;
   }
 
-  return json({ ok: true, id: invoiceId });
+  return ok({ ok: true, id: invoiceId });
 }
 
 async function deleteInvoice(sql, id) {
   await sql`DELETE FROM invoices WHERE id = ${id}`;
-  return json({ ok: true });
+  return ok({ ok: true });
 }
 
 // ---- SUGGESTIONS ----
@@ -275,7 +261,6 @@ async function getSuggestions(sql) {
   const descriptions = await sql`SELECT DISTINCT description FROM invoice_items WHERE description != '' ORDER BY description`;
   const numbers = await sql`SELECT number FROM invoices ORDER BY created_at DESC LIMIT 1`;
 
-  // Suggest next invoice number
   let nextNumber = "EM01377297-100";
   if (numbers.length > 0) {
     const last = numbers[0].number;
@@ -286,70 +271,64 @@ async function getSuggestions(sql) {
     }
   }
 
-  return json({
+  return ok({
     clients: clients.map((r) => r.name),
     descriptions: descriptions.map((r) => r.description),
     nextNumber,
   });
 }
 
-// ---- HANDLER ----
+// ---- HANDLER (v1 format) ----
 
-export default async function handler(req) {
+export const handler = async (event) => {
   try {
     const sql = neon();
-    const url = new URL(req.url);
-    const action = url.searchParams.get("action");
-    const id = url.searchParams.get("id");
+    const params = event.queryStringParameters || {};
+    const action = params.action;
+    const id = params.id;
+    const method = event.httpMethod;
 
-    // GET actions
-    if (req.method === "GET") {
+    if (method === "OPTIONS") {
+      return {
+        statusCode: 200,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+        body: "",
+      };
+    }
+
+    if (method === "GET") {
       switch (action) {
-        case "setup":
-          return setup(sql);
-        case "companies":
-          return getCompanies(sql);
-        case "clients":
-          return getClients(sql);
-        case "invoices":
-          return getInvoices(sql);
-        case "invoice":
-          return getInvoice(sql, id);
-        case "suggestions":
-          return getSuggestions(sql);
-        default:
-          return err("Unknown action: " + action);
+        case "setup": return setup(sql);
+        case "companies": return getCompanies(sql);
+        case "clients": return getClients(sql);
+        case "invoices": return getInvoices(sql);
+        case "invoice": return getInvoice(sql, id);
+        case "suggestions": return getSuggestions(sql);
+        default: return fail("Unknown action: " + action);
       }
     }
 
-    // POST actions
-    if (req.method === "POST") {
-      const data = await req.json();
+    if (method === "POST") {
+      const data = JSON.parse(event.body || "{}");
       switch (action) {
-        case "save-company":
-          return saveCompany(sql, data);
-        case "save-invoice":
-          return saveInvoice(sql, data);
-        default:
-          return err("Unknown action: " + action);
+        case "save-company": return saveCompany(sql, data);
+        case "save-invoice": return saveInvoice(sql, data);
+        default: return fail("Unknown action: " + action);
       }
     }
 
-    // DELETE
-    if (req.method === "DELETE") {
-      if (action === "delete-invoice") {
-        return deleteInvoice(sql, id);
-      }
-      return err("Unknown action");
+    if (method === "DELETE") {
+      if (action === "delete-invoice") return deleteInvoice(sql, id);
+      return fail("Unknown action");
     }
 
-    return err("Method not allowed", 405);
+    return fail("Method not allowed", 405);
   } catch (e) {
     console.error("API Error:", e);
-    return json({ error: e.message }, 500);
+    return ok({ error: e.message }, 500);
   }
-}
-
-export const config = {
-  path: "/.netlify/functions/api",
 };

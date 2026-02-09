@@ -5,9 +5,9 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["@netlify/neon", "@neondatabase/serverless"]
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = false
