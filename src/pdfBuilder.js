@@ -2,11 +2,11 @@ import { jsPDF } from "jspdf";
 
 function eur(val) {
   var n = parseFloat(val);
-  if (isNaN(n)) return "0,00 \u20AC";
+  if (isNaN(n)) return "0,00 €";
   var fixed = n.toFixed(2);
   var parts = fixed.split(".");
   var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  return intPart + "," + parts[1] + " \u20AC";
+  return intPart + "," + parts[1] + " €";
 }
 
 function dateFR(dateStr) {
@@ -27,9 +27,9 @@ function drawTableHeader(doc, y) {
   doc.setFont("helvetica","bold"); doc.setFontSize(9);
   doc.setTextColor(WHITE_[0],WHITE_[1],WHITE_[2]);
   doc.text("Description", DESC_X, y+6.5);
-  doc.text("Quantit\u00E9", QTY_X, y+6.5, {align:"center"});
-  doc.text("Prix unitaire \u20AC", PRICE_X, y+6.5, {align:"center"});
-  doc.text("Montant \u20AC", AMT_X, y+6.5, {align:"right"});
+  doc.text("Quantité", QTY_X, y+6.5, {align:"center"});
+  doc.text("Prix unitaire €", PRICE_X, y+6.5, {align:"center"});
+  doc.text("Montant €", AMT_X, y+6.5, {align:"right"});
 }
 
 function drawFooter(doc, company) {
@@ -69,7 +69,7 @@ export function buildInvoicePDF(company, invoice, totalTTC) {
   // CLIENT + DATE
   y+=10;
   doc.setFont("helvetica","italic"); doc.setFontSize(9.5); sc(doc,TEAL);
-  doc.text("\u00C0 l\u2019attention de", ML, y);
+  doc.text("À l’attention de", ML, y);
   doc.setFont("helvetica","bold"); sc(doc,LGRAY);
   doc.text("Date", W-MR, y, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(10); sc(doc,DARK);
@@ -114,12 +114,12 @@ export function buildInvoicePDF(company, invoice, totalTTC) {
   doc.setFont("helvetica","bold");doc.setFontSize(10);sc(doc,TEAL);
   doc.text("Conditions",ML,y);y+=5;
   doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(85,85,85);
-  doc.text(invoice.conditions||"Paiement \u00E0 r\u00E9ception",ML,y);y+=10;
+  doc.text(invoice.conditions||"Paiement à réception",ML,y);y+=10;
 
   // PAYMENT
   if(y+20>PAGE_USABLE_BOTTOM){doc.addPage();y=25;}
   doc.setFont("helvetica","bold");doc.setFontSize(10);sc(doc,TEAL);
-  doc.text("D\u00E9tails paiement",ML,y);y+=5;
+  doc.text("Détails paiement",ML,y);y+=5;
   doc.setFont("helvetica","bold");doc.setFontSize(9.5);doc.setTextColor(85,85,85);
   var pl="Paypal : ";doc.text(pl,ML,y);
   doc.setFont("helvetica","normal");doc.text(company.paypal,ML+doc.getTextWidth(pl),y);
