@@ -1,0 +1,21 @@
+{
+  "name": "codkage-factures",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "jspdf": "^2.5.2",
+    "@netlify/neon": "^0.1.2",
+    "@netlify/functions": "^2.8.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^5.0.0"
+  }
+}
