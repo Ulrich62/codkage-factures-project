@@ -77,6 +77,7 @@ export function buildInvoicePDF(company, invoice, totalTTC) {
 
   var cy=y+6;
   if(invoice.clientName){doc.text(String(invoice.clientName),ML,cy);cy+=5;}
+  if(invoice.clientSiren){doc.text("SIREN : "+String(invoice.clientSiren),ML,cy);cy+=5;}
   if(invoice.clientAddress){doc.text(String(invoice.clientAddress),ML,cy);cy+=5;}
   if(invoice.clientCity){doc.text(String(invoice.clientCity),ML,cy);cy+=5;}
 

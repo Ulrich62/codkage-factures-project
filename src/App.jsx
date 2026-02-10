@@ -212,6 +212,7 @@ export default function InvoiceApp() {
         clientName: found.client_name || "",
         clientAddress: found.client_address || "",
         clientCity: found.client_city || "",
+        clientSiren: found.client_siren || "",
       }));
     }
   };
@@ -301,6 +302,7 @@ export default function InvoiceApp() {
                     suggestions={suggestions.clients}
                     placeholder="Simon HEILLES EI"
                   />
+                  <Field label="SIREN" value={invoice.clientSiren} onChange={(v) => setInvoice((p) => ({ ...p, clientSiren: v }))} placeholder="123 456 789" />
                   <Field label="Adresse" value={invoice.clientAddress} onChange={(v) => setInvoice((p) => ({ ...p, clientAddress: v }))} placeholder="78 rue Saint Gervais" />
                   <Field label="Ville / Code postal" value={invoice.clientCity} onChange={(v) => setInvoice((p) => ({ ...p, clientCity: v }))} placeholder="76000 Rouen" />
                 </div>
@@ -621,6 +623,7 @@ function InvoicePreview({ company, invoice, totalTTC }) {
           <div style={{ fontSize: 13, color: "#2eb8b8", fontWeight: 600, fontStyle: "italic", marginBottom: 6 }}>À l'attention de</div>
           <div style={{ fontSize: 14, lineHeight: 1.7, color: "#333" }}>
             {invoice.clientName || <span style={{ color: "#ccc" }}>Nom du client</span>}
+            {invoice.clientSiren && <><br />SIREN : {invoice.clientSiren}</>}
             {invoice.clientAddress && <><br />{invoice.clientAddress}</>}
             {invoice.clientCity && <><br />{invoice.clientCity}</>}
           </div>
