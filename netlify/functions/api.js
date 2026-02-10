@@ -147,7 +147,7 @@ async function getInvoices(sql) {
   const rows = await sql`
     SELECT
       i.*,
-      c.name as client_name, c.address as client_address, c.city as client_city,
+      c.name as client_name, c.address as client_address, c.city as client_city, c.siren as client_siren,
       co.name as company_name
     FROM invoices i
     LEFT JOIN clients c ON i.client_id = c.id
