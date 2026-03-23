@@ -59,6 +59,7 @@ async function setup(sql) {
       client_id INTEGER REFERENCES clients(id),
       conditions TEXT DEFAULT 'Paiement à réception',
       payment_methods TEXT DEFAULT '["paypal"]',
+      currency TEXT DEFAULT 'EUR',
       total_ttc DECIMAL(12,2) DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW()
     )
@@ -75,8 +76,9 @@ async function setup(sql) {
     )
   `;
 
-  // Add payment_methods column to invoices if missing
+  // Add payment_methods and currency columns to invoices if missing
   await sql`DO $$ BEGIN ALTER TABLE invoices ADD COLUMN payment_methods TEXT DEFAULT '["paypal"]'; EXCEPTION WHEN duplicate_column THEN NULL; END $$`;
+  await sql`DO $$ BEGIN ALTER TABLE invoices ADD COLUMN currency TEXT DEFAULT 'EUR'; EXCEPTION WHEN duplicate_column THEN NULL; END $$`;
 
   const companies = await sql`SELECT id FROM companies LIMIT 1`;
   if (companies.length === 0) {
@@ -264,6 +266,7 @@ async function saveInvoice(sql, data) {
         client_id = ${clientId},
         conditions = ${data.conditions || "Paiement à réception"},
         payment_methods = ${JSON.stringify(data.paymentMethods || ["paypal"])},
+        currency = ${data.currency || "EUR"},
         total_ttc = ${totalTtc}
       WHERE id = ${data.id}
     `;
@@ -271,8 +274,8 @@ async function saveInvoice(sql, data) {
     await sql`DELETE FROM invoice_items WHERE invoice_id = ${invoiceId}`;
   } else {
     const rows = await sql`
-      INSERT INTO invoices (number, date, company_id, client_id, conditions, payment_methods, total_ttc)
-      VALUES (${data.number}, ${data.date}, ${companyId}, ${clientId}, ${data.conditions || "Paiement à réception"}, ${JSON.stringify(data.paymentMethods || ["paypal"])}, ${totalTtc})
+      INSERT INTO invoices (number, date, company_id, client_id, conditions, payment_methods, currency, total_ttc)
+      VALUES (${data.number}, ${data.date}, ${companyId}, ${clientId}, ${data.conditions || "Paiement à réception"}, ${JSON.stringify(data.paymentMethods || ["paypal"])}, ${data.currency || "EUR"}, ${totalTtc})
       RETURNING id
     `;
     invoiceId = rows[0].id;

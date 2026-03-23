@@ -1,12 +1,29 @@
 import { jsPDF } from "jspdf";
 
-function eur(val) {
+var CURR = {
+  EUR: { symbol: "€", decimals: 2 },
+  XOF: { symbol: "FCFA", decimals: 0 },
+  USD: { symbol: "$", decimals: 2 },
+};
+
+function money(val, currency) {
+  var c = CURR[currency] || CURR.EUR;
   var n = parseFloat(val);
-  if (isNaN(n)) return "0,00 €";
-  var fixed = n.toFixed(2);
-  var parts = fixed.split(".");
-  var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  return intPart + "," + parts[1] + " €";
+  if (isNaN(n)) return c.decimals === 0 ? "0 " + c.symbol : "0,00 " + c.symbol;
+  if (currency === "USD") {
+    var fixed = n.toFixed(2);
+    var parts = fixed.split(".");
+    var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return "$" + intPart + "." + parts[1];
+  }
+  if (c.decimals === 0) {
+    var rounded = Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    return rounded + " " + c.symbol;
+  }
+  var fixed2 = n.toFixed(2);
+  var parts2 = fixed2.split(".");
+  var intPart2 = parts2[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return intPart2 + "," + parts2[1] + " " + c.symbol;
 }
 
 function dateFR(dateStr) {
@@ -21,15 +38,15 @@ var PAGE_USABLE_BOTTOM = 265, POST_TABLE_SPACE = 100;
 var TEAL=[46,184,184],DARK=[51,51,51],GRAY=[102,102,102],LGRAY=[136,136,136],WHITE_=[255,255,255],BG=[245,245,245],LINE=[230,230,230];
 function sc(d,c){d.setTextColor(c[0],c[1],c[2]);}
 
-function drawTableHeader(doc, y) {
+function drawTableHeader(doc, y, currSym) {
   doc.setFillColor(TEAL[0],TEAL[1],TEAL[2]);
   doc.rect(ML, y, CW, 10, "F");
   doc.setFont("helvetica","bold"); doc.setFontSize(9);
   doc.setTextColor(WHITE_[0],WHITE_[1],WHITE_[2]);
   doc.text("Description", DESC_X, y+6.5);
   doc.text("Quantité", QTY_X, y+6.5, {align:"center"});
-  doc.text("Prix unitaire €", PRICE_X, y+6.5, {align:"center"});
-  doc.text("Montant €", AMT_X, y+6.5, {align:"right"});
+  doc.text("Prix unitaire "+currSym, PRICE_X, y+6.5, {align:"center"});
+  doc.text("Montant "+currSym, AMT_X, y+6.5, {align:"right"});
 }
 
 function drawFooter(doc, company) {
@@ -82,8 +99,10 @@ export function buildInvoicePDF(company, invoice, totalTTC) {
   if(invoice.clientCity){doc.text(String(invoice.clientCity),ML,cy);cy+=5;}
 
   // TABLE
+  var curr = invoice.currency || "EUR";
+  var currSym = (CURR[curr] || CURR.EUR).symbol;
   y=Math.max(cy+8,100);
-  drawTableHeader(doc,y); y+=10;
+  drawTableHeader(doc,y,currSym); y+=10;
 
   for(var idx=0;idx<invoice.items.length;idx++){
     var item=invoice.items[idx];
@@ -91,13 +110,13 @@ export function buildInvoicePDF(company, invoice, totalTTC) {
     var descLines=doc.splitTextToSize(String(desc),DESC_W);
     var rowH=Math.max(10,descLines.length*5+5);
     var isLast=idx===invoice.items.length-1;
-    if(y+(isLast?POST_TABLE_SPACE:rowH)>PAGE_USABLE_BOTTOM){doc.addPage();y=25;drawTableHeader(doc,y);y+=10;}
+    if(y+(isLast?POST_TABLE_SPACE:rowH)>PAGE_USABLE_BOTTOM){doc.addPage();y=25;drawTableHeader(doc,y,currSym);y+=10;}
     doc.setFont("helvetica","normal");doc.setFontSize(9.5);sc(doc,DARK);
     doc.setDrawColor(LINE[0],LINE[1],LINE[2]);doc.setLineWidth(0.3);doc.line(ML,y+rowH,ML+CW,y+rowH);
     doc.text(descLines,DESC_X,y+6.5);
     doc.text(item.quantity?String(item.quantity):"-",QTY_X,y+6.5,{align:"center"});
-    doc.text(item.unitPrice?eur(item.unitPrice):"-",PRICE_X,y+6.5,{align:"center"});
-    var av=parseFloat(item.amount);doc.text(av>0?eur(av):"-",AMT_X,y+6.5,{align:"right"});
+    doc.text(item.unitPrice?money(item.unitPrice,curr):"-",PRICE_X,y+6.5,{align:"center"});
+    var av=parseFloat(item.amount);doc.text(av>0?money(av,curr):"-",AMT_X,y+6.5,{align:"right"});
     y+=rowH;
   }
 
@@ -107,7 +126,7 @@ export function buildInvoicePDF(company, invoice, totalTTC) {
   doc.setFillColor(BG[0],BG[1],BG[2]);doc.rect(tx,y,tw,12,"F");
   doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(85,85,85);
   doc.text("Total TTC",tx+6,y+8);
-  doc.setFontSize(14);sc(doc,DARK);doc.text(eur(totalTTC),tx+tw-6,y+8.5,{align:"right"});
+  doc.setFontSize(14);sc(doc,DARK);doc.text(money(totalTTC,curr),tx+tw-6,y+8.5,{align:"right"});
   y+=20;
 
   // CONDITIONS

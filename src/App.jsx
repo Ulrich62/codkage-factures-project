@@ -4,10 +4,23 @@ import { buildInvoicePDF } from "./pdfBuilder.js";
 
 // ---- HELPERS ----
 
-function formatEuro(val) {
+const CURRENCIES = {
+  EUR: { symbol: "€", label: "Euro (€)" },
+  XOF: { symbol: "FCFA", label: "FCFA" },
+  USD: { symbol: "$", label: "Dollar ($)" },
+};
+
+function formatMoney(val, currency = "EUR") {
   const n = parseFloat(val);
-  if (isNaN(n)) return "0,00 €";
-  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  if (isNaN(n)) return currency === "XOF" ? "0 FCFA" : "0,00 " + (CURRENCIES[currency]?.symbol || "€");
+  if (currency === "XOF") {
+    return Math.round(n).toLocaleString("fr-FR") + " FCFA";
+  }
+  const sym = CURRENCIES[currency]?.symbol || "€";
+  if (currency === "USD") {
+    return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + sym;
 }
 
 function formatDateFR(dateStr) {
@@ -28,6 +41,7 @@ function emptyInvoice(num) {
     items: [{ id: Date.now(), description: "", quantity: "", unitPrice: "", amount: "" }],
     conditions: "Paiement à réception",
     paymentMethods: ["paypal"],
+    currency: "EUR",
   };
 }
 
@@ -168,6 +182,7 @@ export default function InvoiceApp() {
       })),
       conditions: inv.conditions || "Paiement à réception",
       paymentMethods: inv.payment_methods ? (typeof inv.payment_methods === "string" ? JSON.parse(inv.payment_methods) : inv.payment_methods) : ["paypal"],
+      currency: inv.currency || "EUR",
     });
     if (inv.company_name) {
       setCompany((p) => ({
@@ -279,6 +294,18 @@ export default function InvoiceApp() {
                   <Field label="N° Facture" value={invoice.number} onChange={(v) => setInvoice((p) => ({ ...p, number: v }))} />
                   <Field label="Date" type="date" value={invoice.date} onChange={(v) => setInvoice((p) => ({ ...p, date: v }))} />
                 </div>
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ fontSize: 11, color: "#888", fontWeight: 600, display: "block", marginBottom: 4 }}>Devise</label>
+                  <select
+                    value={invoice.currency || "EUR"}
+                    onChange={(e) => setInvoice((p) => ({ ...p, currency: e.target.value }))}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    {Object.entries(CURRENCIES).map(([code, { label }]) => (
+                      <option key={code} value={code}>{label}</option>
+                    ))}
+                  </select>
+                </div>
               </Card>
 
               <Card title="Émetteur" action={
@@ -355,12 +382,12 @@ export default function InvoiceApp() {
                     />
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 10, marginTop: 8 }}>
                       <Field label="Quantité" type="number" value={item.quantity} onChange={(v) => updateItem(item.id, "quantity", v)} placeholder="-" />
-                      <Field label="Prix unitaire €" type="number" value={item.unitPrice} onChange={(v) => updateItem(item.id, "unitPrice", v)} placeholder="-" />
+                      <Field label={`Prix unitaire ${CURRENCIES[invoice.currency]?.symbol || "€"}`} type="number" value={item.unitPrice} onChange={(v) => updateItem(item.id, "unitPrice", v)} placeholder="-" />
                       <div style={isMobile ? { gridColumn: "1 / -1" } : {}}>
-                        <label style={{ fontSize: 11, color: "#888", fontWeight: 600, display: "block", marginBottom: 4 }}>Montant €</label>
+                        <label style={{ fontSize: 11, color: "#888", fontWeight: 600, display: "block", marginBottom: 4 }}>Montant {CURRENCIES[invoice.currency]?.symbol || "€"}</label>
                         {item.quantity && parseFloat(item.quantity) > 0 ? (
                           <div style={{ padding: "8px 10px", background: "#e8f4f4", borderRadius: 6, fontSize: 14, fontWeight: 600, color: "#2a5a5a" }}>
-                            {item.amount && parseFloat(item.amount) > 0 ? formatEuro(item.amount) : "—"}
+                            {item.amount && parseFloat(item.amount) > 0 ? formatMoney(item.amount, invoice.currency) : "—"}
                           </div>
                         ) : (
                           <input type="number" value={item.amount} onChange={(e) => updateItem(item.id, "amount", e.target.value)} placeholder="Forfait"
@@ -465,7 +492,7 @@ export default function InvoiceApp() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 16, flexShrink: 0 }}>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: "#2eb8b8" }}>{formatEuro(s.total_ttc)}</div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#2eb8b8" }}>{formatMoney(s.total_ttc, s.currency)}</div>
                       <div style={{ fontSize: 12, color: "#888" }}>{s.date ? formatDateFR(s.date.split("T")[0]) : ""}</div>
                     </div>
                     <button onClick={(e) => handleDelete(s.id, e)} style={{ background: "none", border: "none", color: "#c55", cursor: "pointer", fontSize: 16 }} title="Supprimer">×</button>
@@ -694,8 +721,8 @@ function InvoicePreview({ company, invoice, totalTTC }) {
           <tr>
             <th style={{ background: "#2eb8b8", color: "white", padding: "10px 14px", fontSize: 13, fontWeight: 600, textAlign: "left" }}>Description</th>
             <th style={{ background: "#2eb8b8", color: "white", padding: "10px 14px", fontSize: 13, fontWeight: 600, textAlign: "center" }}>Quantité</th>
-            <th style={{ background: "#2eb8b8", color: "white", padding: "10px 14px", fontSize: 13, fontWeight: 600, textAlign: "center" }}>Prix unitaire €</th>
-            <th style={{ background: "#2eb8b8", color: "white", padding: "10px 14px", fontSize: 13, fontWeight: 600, textAlign: "center" }}>Montant €</th>
+            <th style={{ background: "#2eb8b8", color: "white", padding: "10px 14px", fontSize: 13, fontWeight: 600, textAlign: "center" }}>{"Prix unitaire " + (CURRENCIES[invoice.currency]?.symbol || "€")}</th>
+            <th style={{ background: "#2eb8b8", color: "white", padding: "10px 14px", fontSize: 13, fontWeight: 600, textAlign: "center" }}>{"Montant " + (CURRENCIES[invoice.currency]?.symbol || "€")}</th>
           </tr>
         </thead>
         <tbody>
@@ -703,8 +730,8 @@ function InvoicePreview({ company, invoice, totalTTC }) {
             <tr key={item.id}>
               <td style={{ padding: "12px 14px", fontSize: 13, borderBottom: "1px solid #eee", color: "#333" }}>{item.description || <span style={{ color: "#ccc" }}>—</span>}</td>
               <td style={{ padding: "12px 14px", fontSize: 13, borderBottom: "1px solid #eee", textAlign: "center" }}>{item.quantity || "-"}</td>
-              <td style={{ padding: "12px 14px", fontSize: 13, borderBottom: "1px solid #eee", textAlign: "center" }}>{item.unitPrice ? formatEuro(item.unitPrice) : "-"}</td>
-              <td style={{ padding: "12px 14px", fontSize: 13, borderBottom: "1px solid #eee", textAlign: "center" }}>{item.amount && parseFloat(item.amount) > 0 ? formatEuro(item.amount) : "-"}</td>
+              <td style={{ padding: "12px 14px", fontSize: 13, borderBottom: "1px solid #eee", textAlign: "center" }}>{item.unitPrice ? formatMoney(item.unitPrice, invoice.currency) : "-"}</td>
+              <td style={{ padding: "12px 14px", fontSize: 13, borderBottom: "1px solid #eee", textAlign: "center" }}>{item.amount && parseFloat(item.amount) > 0 ? formatMoney(item.amount, invoice.currency) : "-"}</td>
             </tr>
           ))}
         </tbody>
@@ -713,7 +740,7 @@ function InvoicePreview({ company, invoice, totalTTC }) {
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 44 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 40, background: "#f5f5f5", padding: "12px 28px", minWidth: 280 }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: "#555" }}>Total TTC</span>
-          <span style={{ fontWeight: 700, fontSize: 20, color: "#333", marginLeft: "auto" }}>{formatEuro(totalTTC)}</span>
+          <span style={{ fontWeight: 700, fontSize: 20, color: "#333", marginLeft: "auto" }}>{formatMoney(totalTTC, invoice.currency)}</span>
         </div>
       </div>
 
