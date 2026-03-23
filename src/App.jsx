@@ -27,6 +27,7 @@ function emptyInvoice(num) {
     clientSiren: "",
     items: [{ id: Date.now(), description: "", quantity: "", unitPrice: "", amount: "" }],
     conditions: "Paiement à réception",
+    paymentMethods: ["paypal"],
   };
 }
 
@@ -47,6 +48,9 @@ export default function InvoiceApp() {
   const [company, setCompany] = useState({
     id: null, name: "CODKAGE DEVELOPPEMENT", address: "Ilot: C/SB, Gounin, Parakou Bénin",
     email: "adimiulrich06@gmail.com", ifu: "0202375331610", vmcf: "EM01377197", paypal: "adimiulrich06@gmail.com",
+    bank_name: "Banking Circle S.A.", bank_address: "2, Boulevard de la Foire L-1528 LUXEMBOURG",
+    iban: "LU854080000045687538", bic: "BCIRLULL", beneficiary: "Ulrich ADIMI",
+    transfer_type: "Local transfer", mobile_money: "+229 0196551628",
   });
   const [invoice, setInvoice] = useState(emptyInvoice());
   const [activeTab, setActiveTab] = useState("edit");
@@ -163,6 +167,7 @@ export default function InvoiceApp() {
         amount: it.amount ? String(it.amount) : "",
       })),
       conditions: inv.conditions || "Paiement à réception",
+      paymentMethods: inv.payment_methods ? (typeof inv.payment_methods === "string" ? JSON.parse(inv.payment_methods) : inv.payment_methods) : ["paypal"],
     });
     if (inv.company_name) {
       setCompany((p) => ({
@@ -173,6 +178,13 @@ export default function InvoiceApp() {
         ifu: inv.company_ifu || p.ifu,
         vmcf: inv.company_vmcf || p.vmcf,
         paypal: inv.company_paypal || p.paypal,
+        bank_name: inv.company_bank_name || p.bank_name,
+        bank_address: inv.company_bank_address || p.bank_address,
+        iban: inv.company_iban || p.iban,
+        bic: inv.company_bic || p.bic,
+        beneficiary: inv.company_beneficiary || p.beneficiary,
+        transfer_type: inv.company_transfer_type || p.transfer_type,
+        mobile_money: inv.company_mobile_money || p.mobile_money,
       }));
     }
     setActiveTab("edit");
@@ -284,6 +296,23 @@ export default function InvoiceApp() {
                       <Field label="VMCF" value={company.vmcf} onChange={(v) => setCompany((p) => ({ ...p, vmcf: v }))} />
                     </div>
                     <Field label="PayPal" value={company.paypal} onChange={(v) => setCompany((p) => ({ ...p, paypal: v }))} />
+                    <div style={{ borderTop: "1px solid #e8eded", paddingTop: 10, marginTop: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#2eb8b8", marginBottom: 8 }}>Virement bancaire</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <Field label="Banque" value={company.bank_name} onChange={(v) => setCompany((p) => ({ ...p, bank_name: v }))} />
+                        <Field label="Type de transfert" value={company.transfer_type} onChange={(v) => setCompany((p) => ({ ...p, transfer_type: v }))} />
+                      </div>
+                      <Field label="Adresse banque" value={company.bank_address} onChange={(v) => setCompany((p) => ({ ...p, bank_address: v }))} />
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+                        <Field label="IBAN" value={company.iban} onChange={(v) => setCompany((p) => ({ ...p, iban: v }))} />
+                        <Field label="BIC" value={company.bic} onChange={(v) => setCompany((p) => ({ ...p, bic: v }))} />
+                      </div>
+                      <Field label="Bénéficiaire" value={company.beneficiary} onChange={(v) => setCompany((p) => ({ ...p, beneficiary: v }))} />
+                    </div>
+                    <div style={{ borderTop: "1px solid #e8eded", paddingTop: 10, marginTop: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#2eb8b8", marginBottom: 8 }}>Mobile Money</div>
+                      <Field label="Numéro Mobile Money" value={company.mobile_money} onChange={(v) => setCompany((p) => ({ ...p, mobile_money: v }))} />
+                    </div>
                   </div>
                 ) : (
                   <div style={{ fontSize: 13, color: "#666", lineHeight: 1.6 }}>
@@ -348,6 +377,32 @@ export default function InvoiceApp() {
 
               <Card title="Conditions">
                 <Field label="Conditions de paiement" value={invoice.conditions} onChange={(v) => setInvoice((p) => ({ ...p, conditions: v }))} />
+              </Card>
+
+              <Card title="Moyens de paiement">
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { key: "paypal", label: "PayPal" },
+                    { key: "bank", label: "Virement bancaire" },
+                    { key: "mobile_money", label: "Mobile Money" },
+                  ].map((pm) => (
+                    <label key={pm.key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "#333" }}>
+                      <input
+                        type="checkbox"
+                        checked={(invoice.paymentMethods || []).includes(pm.key)}
+                        onChange={(e) => {
+                          setInvoice((p) => {
+                            const methods = p.paymentMethods || [];
+                            if (e.target.checked) return { ...p, paymentMethods: [...methods, pm.key] };
+                            return { ...p, paymentMethods: methods.filter((m) => m !== pm.key) };
+                          });
+                        }}
+                        style={{ accentColor: "#2eb8b8", width: 16, height: 16 }}
+                      />
+                      {pm.label}
+                    </label>
+                  ))}
+                </div>
               </Card>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -668,8 +723,23 @@ function InvoicePreview({ company, invoice, totalTTC }) {
       </div>
 
       <div style={{ marginBottom: 50 }}>
-        <div style={{ color: "#2eb8b8", fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Détails paiement</div>
-        <div style={{ fontSize: 13, color: "#555" }}><strong>Paypal :</strong> {company.paypal}</div>
+        <div style={{ color: "#2eb8b8", fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Détails paiement</div>
+        {(invoice.paymentMethods || ["paypal"]).includes("paypal") && company.paypal && (
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 6 }}><strong>PayPal :</strong> {company.paypal}</div>
+        )}
+        {(invoice.paymentMethods || []).includes("bank") && company.iban && (
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 6, lineHeight: 1.7 }}>
+            <strong>Virement bancaire</strong><br />
+            Banque : {company.bank_name}{company.transfer_type ? ` (${company.transfer_type})` : ""}<br />
+            {company.bank_address && <>{company.bank_address}<br /></>}
+            IBAN : {company.iban}<br />
+            BIC : {company.bic}<br />
+            Bénéficiaire : {company.beneficiary}
+          </div>
+        )}
+        {(invoice.paymentMethods || []).includes("mobile_money") && company.mobile_money && (
+          <div style={{ fontSize: 13, color: "#555" }}><strong>Mobile Money :</strong> {company.mobile_money}</div>
+        )}
       </div>
 
       <div style={{ textAlign: "center", fontSize: 12, color: "#999", borderTop: "1px solid #e0e0e0", paddingTop: 16 }}>

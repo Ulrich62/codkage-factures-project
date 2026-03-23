@@ -17,7 +17,7 @@ function dateFR(dateStr) {
 
 var W = 210, PAGE_H = 297, ML = 22, MR = 22, CW = W - ML - MR;
 var DESC_X = ML + 4, DESC_W = 76, QTY_X = ML + 88, PRICE_X = ML + 120, AMT_X = ML + CW - 4;
-var PAGE_USABLE_BOTTOM = 265, POST_TABLE_SPACE = 80;
+var PAGE_USABLE_BOTTOM = 265, POST_TABLE_SPACE = 100;
 var TEAL=[46,184,184],DARK=[51,51,51],GRAY=[102,102,102],LGRAY=[136,136,136],WHITE_=[255,255,255],BG=[245,245,245],LINE=[230,230,230];
 function sc(d,c){d.setTextColor(c[0],c[1],c[2]);}
 
@@ -118,12 +118,37 @@ export function buildInvoicePDF(company, invoice, totalTTC) {
   doc.text(invoice.conditions||"Paiement à réception",ML,y);y+=10;
 
   // PAYMENT
+  var methods = invoice.paymentMethods || ["paypal"];
   if(y+20>PAGE_USABLE_BOTTOM){doc.addPage();y=25;}
   doc.setFont("helvetica","bold");doc.setFontSize(10);sc(doc,TEAL);
-  doc.text("Détails paiement",ML,y);y+=5;
-  doc.setFont("helvetica","bold");doc.setFontSize(9.5);doc.setTextColor(85,85,85);
-  var pl="Paypal : ";doc.text(pl,ML,y);
-  doc.setFont("helvetica","normal");doc.text(company.paypal,ML+doc.getTextWidth(pl),y);
+  doc.text("Détails paiement",ML,y);y+=6;
+
+  if(methods.includes("paypal") && company.paypal){
+    doc.setFont("helvetica","bold");doc.setFontSize(9.5);doc.setTextColor(85,85,85);
+    var pl="PayPal : ";doc.text(pl,ML,y);
+    doc.setFont("helvetica","normal");doc.text(company.paypal,ML+doc.getTextWidth(pl),y);
+    y+=6;
+  }
+
+  if(methods.includes("bank") && company.iban){
+    if(y+30>PAGE_USABLE_BOTTOM){doc.addPage();y=25;}
+    doc.setFont("helvetica","bold");doc.setFontSize(9.5);doc.setTextColor(85,85,85);
+    doc.text("Virement bancaire",ML,y);y+=5;
+    doc.setFont("helvetica","normal");doc.setFontSize(9);
+    doc.text("Banque : "+(company.bank_name||"")+(company.transfer_type?" ("+company.transfer_type+")":""),ML,y);y+=4.5;
+    if(company.bank_address){doc.text(company.bank_address,ML,y);y+=4.5;}
+    doc.text("IBAN : "+(company.iban||""),ML,y);y+=4.5;
+    doc.text("BIC : "+(company.bic||""),ML,y);y+=4.5;
+    doc.text("Bénéficiaire : "+(company.beneficiary||""),ML,y);y+=6;
+  }
+
+  if(methods.includes("mobile_money") && company.mobile_money){
+    if(y+10>PAGE_USABLE_BOTTOM){doc.addPage();y=25;}
+    doc.setFont("helvetica","bold");doc.setFontSize(9.5);doc.setTextColor(85,85,85);
+    var ml="Mobile Money : ";doc.text(ml,ML,y);
+    doc.setFont("helvetica","normal");doc.text(company.mobile_money,ML+doc.getTextWidth(ml),y);
+    y+=6;
+  }
 
   // FOOTER on every page
   drawFooter(doc, company);

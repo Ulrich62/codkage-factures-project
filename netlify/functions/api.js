@@ -24,10 +24,22 @@ async function setup(sql) {
       ifu TEXT DEFAULT '',
       vmcf TEXT DEFAULT '',
       paypal TEXT DEFAULT '',
+      bank_name TEXT DEFAULT '',
+      bank_address TEXT DEFAULT '',
+      iban TEXT DEFAULT '',
+      bic TEXT DEFAULT '',
+      beneficiary TEXT DEFAULT '',
+      transfer_type TEXT DEFAULT '',
+      mobile_money TEXT DEFAULT '',
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `;
+  // Add columns if they don't exist (for existing databases)
+  const cols = ['bank_name','bank_address','iban','bic','beneficiary','transfer_type','mobile_money'];
+  for (const col of cols) {
+    await sql`DO $$ BEGIN ALTER TABLE companies ADD COLUMN ${sql.unsafe(col)} TEXT DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END $$`;
+  }
   await sql`
     CREATE TABLE IF NOT EXISTS clients (
       id SERIAL PRIMARY KEY,
@@ -46,6 +58,7 @@ async function setup(sql) {
       company_id INTEGER REFERENCES companies(id),
       client_id INTEGER REFERENCES clients(id),
       conditions TEXT DEFAULT 'Paiement à réception',
+      payment_methods TEXT DEFAULT '["paypal"]',
       total_ttc DECIMAL(12,2) DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW()
     )
@@ -62,17 +75,27 @@ async function setup(sql) {
     )
   `;
 
+  // Add payment_methods column to invoices if missing
+  await sql`DO $$ BEGIN ALTER TABLE invoices ADD COLUMN payment_methods TEXT DEFAULT '["paypal"]'; EXCEPTION WHEN duplicate_column THEN NULL; END $$`;
+
   const companies = await sql`SELECT id FROM companies LIMIT 1`;
   if (companies.length === 0) {
     await sql`
-      INSERT INTO companies (name, address, email, ifu, vmcf, paypal)
+      INSERT INTO companies (name, address, email, ifu, vmcf, paypal, bank_name, bank_address, iban, bic, beneficiary, transfer_type, mobile_money)
       VALUES (
         'CODKAGE DEVELOPPEMENT',
         'Ilot: C/SB, Gounin, Parakou Bénin',
         'adimiulrich06@gmail.com',
         '0202375331610',
         'EM01377197',
-        'adimiulrich06@gmail.com'
+        'adimiulrich06@gmail.com',
+        'Banking Circle S.A.',
+        '2, Boulevard de la Foire L-1528 LUXEMBOURG',
+        'LU854080000045687538',
+        'BCIRLULL',
+        'Ulrich ADIMI',
+        'Local transfer',
+        '+229 0196551628'
       )
     `;
   }
@@ -97,6 +120,13 @@ async function saveCompany(sql, data) {
         ifu = ${data.ifu || ""},
         vmcf = ${data.vmcf || ""},
         paypal = ${data.paypal || ""},
+        bank_name = ${data.bank_name || ""},
+        bank_address = ${data.bank_address || ""},
+        iban = ${data.iban || ""},
+        bic = ${data.bic || ""},
+        beneficiary = ${data.beneficiary || ""},
+        transfer_type = ${data.transfer_type || ""},
+        mobile_money = ${data.mobile_money || ""},
         updated_at = NOW()
       WHERE id = ${data.id}
       RETURNING *
@@ -104,8 +134,9 @@ async function saveCompany(sql, data) {
     return ok(rows[0]);
   } else {
     const rows = await sql`
-      INSERT INTO companies (name, address, email, ifu, vmcf, paypal)
-      VALUES (${data.name}, ${data.address || ""}, ${data.email || ""}, ${data.ifu || ""}, ${data.vmcf || ""}, ${data.paypal || ""})
+      INSERT INTO companies (name, address, email, ifu, vmcf, paypal, bank_name, bank_address, iban, bic, beneficiary, transfer_type, mobile_money)
+      VALUES (${data.name}, ${data.address || ""}, ${data.email || ""}, ${data.ifu || ""}, ${data.vmcf || ""}, ${data.paypal || ""},
+        ${data.bank_name || ""}, ${data.bank_address || ""}, ${data.iban || ""}, ${data.bic || ""}, ${data.beneficiary || ""}, ${data.transfer_type || ""}, ${data.mobile_money || ""})
       RETURNING *
     `;
     return ok(rows[0]);
@@ -170,7 +201,10 @@ async function getInvoice(sql, id) {
     SELECT i.*,
       c.name as client_name, c.address as client_address, c.city as client_city, c.siren as client_siren,
       co.name as company_name, co.address as company_address, co.email as company_email,
-      co.ifu as company_ifu, co.vmcf as company_vmcf, co.paypal as company_paypal
+      co.ifu as company_ifu, co.vmcf as company_vmcf, co.paypal as company_paypal,
+      co.bank_name as company_bank_name, co.bank_address as company_bank_address,
+      co.iban as company_iban, co.bic as company_bic, co.beneficiary as company_beneficiary,
+      co.transfer_type as company_transfer_type, co.mobile_money as company_mobile_money
     FROM invoices i
     LEFT JOIN clients c ON i.client_id = c.id
     LEFT JOIN companies co ON i.company_id = co.id
@@ -216,6 +250,7 @@ async function saveInvoice(sql, data) {
         company_id = ${companyId},
         client_id = ${clientId},
         conditions = ${data.conditions || "Paiement à réception"},
+        payment_methods = ${JSON.stringify(data.paymentMethods || ["paypal"])},
         total_ttc = ${totalTtc}
       WHERE id = ${data.id}
     `;
@@ -223,8 +258,8 @@ async function saveInvoice(sql, data) {
     await sql`DELETE FROM invoice_items WHERE invoice_id = ${invoiceId}`;
   } else {
     const rows = await sql`
-      INSERT INTO invoices (number, date, company_id, client_id, conditions, total_ttc)
-      VALUES (${data.number}, ${data.date}, ${companyId}, ${clientId}, ${data.conditions || "Paiement à réception"}, ${totalTtc})
+      INSERT INTO invoices (number, date, company_id, client_id, conditions, payment_methods, total_ttc)
+      VALUES (${data.number}, ${data.date}, ${companyId}, ${clientId}, ${data.conditions || "Paiement à réception"}, ${JSON.stringify(data.paymentMethods || ["paypal"])}, ${totalTtc})
       RETURNING id
     `;
     invoiceId = rows[0].id;
