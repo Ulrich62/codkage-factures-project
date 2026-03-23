@@ -98,6 +98,19 @@ async function setup(sql) {
         '+229 0196551628'
       )
     `;
+  } else {
+    // Populate bank/mobile fields on existing company if empty
+    await sql`
+      UPDATE companies SET
+        bank_name = CASE WHEN bank_name = '' THEN 'Banking Circle S.A.' ELSE bank_name END,
+        bank_address = CASE WHEN bank_address = '' THEN '2, Boulevard de la Foire L-1528 LUXEMBOURG' ELSE bank_address END,
+        iban = CASE WHEN iban = '' THEN 'LU854080000045687538' ELSE iban END,
+        bic = CASE WHEN bic = '' THEN 'BCIRLULL' ELSE bic END,
+        beneficiary = CASE WHEN beneficiary = '' THEN 'Ulrich ADIMI' ELSE beneficiary END,
+        transfer_type = CASE WHEN transfer_type = '' THEN 'Local transfer' ELSE transfer_type END,
+        mobile_money = CASE WHEN mobile_money = '' THEN '+229 0196551628' ELSE mobile_money END
+      WHERE id = ${companies[0].id}
+    `;
   }
 
   return ok({ ok: true, message: "Schema ready" });
